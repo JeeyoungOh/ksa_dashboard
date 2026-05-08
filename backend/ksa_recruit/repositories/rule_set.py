@@ -27,10 +27,13 @@ class RuleSetRepository:
         return self.session.execute(stmt).scalar_one_or_none()
 
     def get_active_by_scope(self, scope: str) -> list[models.RuleSet]:
-        """특정 스코프의 활성 룰셋만."""
+        """특정 스코프의 활성(status='ACTIVE') 룰셋만."""
         stmt = (
             select(models.RuleSet)
-            .where(models.RuleSet.scope == scope, models.RuleSet.is_active.is_(True))
+            .where(
+                models.RuleSet.scope == scope,
+                models.RuleSet.status == "ACTIVE",
+            )
             .options(
                 selectinload(models.RuleSet.groups)
                 .selectinload(models.RuleGroup.items)

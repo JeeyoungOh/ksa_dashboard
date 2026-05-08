@@ -2,7 +2,6 @@
 CandidateService — 후보자 등록 비즈니스 로직.
 """
 from __future__ import annotations
-from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -57,7 +56,6 @@ class CandidateService:
             posting_id=posting_id,
             candidate_no=candidate_no,
             status="NORMALIZED",
-            submitted_at=datetime.utcnow(),
         )
         candidate.profile = models.CandidateProfile(
             job_code=job_code,

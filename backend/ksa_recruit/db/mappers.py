@@ -32,14 +32,14 @@ def to_domain_profile(
     return DomainProfile(
         candidate_id=candidate.id,
         candidate_no=candidate.candidate_no,
-        job_code=p.job_code,
-        education_level=EducationLevel(p.education_level),
-        career_years=Decimal(str(p.career_years)),
+        job_code=p.job_code or "",
+        education_level=EducationLevel(p.education_level) if p.education_level else EducationLevel.BACHELOR,
+        career_years=Decimal(str(p.career_years)) if p.career_years is not None else Decimal("0"),
         education=p.education or [],
         certifications=p.certifications or [],
         language_tests=p.language_tests or [],
         submitted_documents=p.submitted_documents or [],
-        legal_disqualification_answer=p.legal_disqualification_answer,
+        legal_disqualification_answer=bool(p.legal_disqualification_answer),
         self_declaration_submitted=p.self_declaration_submitted,
         attachment_checklist=p.attachment_checklist or {},
         normalized_profile=p.normalized_profile or {},
@@ -77,11 +77,10 @@ def to_domain_rule_set(
 
 
 def _to_domain_group(group: db.models.RuleGroup) -> DomainRuleGroup:
-    # RuleGroupCode ENUM에 없는 코드는 알 수 없는 그룹 → 무시 안전
+    # RuleGroupCode ENUM에 없는 코드는 D1로 fallback
     try:
         code = RuleGroupCode(group.code)
     except ValueError:
-        # 미지의 그룹 코드: D1로 fallback (실 운영에선 로깅 + 경고)
         code = RuleGroupCode.D1
     return DomainRuleGroup(
         id=group.id,
@@ -92,6 +91,21 @@ def _to_domain_group(group: db.models.RuleGroup) -> DomainRuleGroup:
 
 
 def _to_domain_item(item: db.models.RuleItem) -> DomainRuleItem:
+    """
+    DB의 rule_items에는 severity 컬럼이 없고, 대신 failure_decision (PASS/FAIL/HOLD/AUTO_FAIL)이 있음.
+    도메인 RuleItem.severity는 ERROR/WARN인데, DB의 failure_decision을 다음과 같이 매핑:
+      - PASS  → "INFO"   (실제로는 사용 안 됨)
+      - HOLD  → "WARN"   (보완 가능)
+      - FAIL / AUTO_FAIL → "ERROR"  (즉시 결격)
+    """
+    failure = item.failure_decision
+    if failure == "HOLD":
+        severity = "WARN"
+    elif failure in ("FAIL", "AUTO_FAIL"):
+        severity = "ERROR"
+    else:
+        severity = "INFO"
+
     return DomainRuleItem(
         id=item.id,
         code=item.code,
@@ -99,6 +113,6 @@ def _to_domain_item(item: db.models.RuleItem) -> DomainRuleItem:
         operator=item.operator,
         field_path=item.field_path,
         expected_value=item.expected_value,
-        severity=item.severity,
-        is_active=item.is_active,
+        severity=severity,
+        is_active=item.active,
     )
